@@ -1,0 +1,26 @@
+CUDA_DEVICE=$1
+TASK_NAME=$2
+METHOD="ACT_BC_LANG"
+IMAGE_SIZE=128
+DEMO_PATH="$PERACT_BIMANUAL_ROOT/$3"
+EXP_NAME=$4
+EVAL_TYPE=$5
+SEED=$6
+
+CUDA_VISIBLE_DEVICES=${CUDA_DEVICE} python eval.py \
+    method=${METHOD} \
+    rlbench.task_name=${EXP_NAME} \
+    rlbench.tasks=[${TASK_NAME}] \
+    rlbench.demo_path=${DEMO_PATH} \
+    rlbench.camera_resolution=[${IMAGE_SIZE},${IMAGE_SIZE}] \
+    rlbench.cameras=[wrist_right,wrist_left] \
+    rlbench.episode_length=400 \
+    rlbench.gripper_mode=BimanualGripperJointPosition \
+    rlbench.arm_action_mode=BimanualJointPosition \
+    rlbench.action_mode=BimanualJointPositionActionMode \
+    framework.logdir=$PERACT_BIMANUAL_ROOT/logs \
+    framework.eval_episodes=25 \
+    framework.eval_type=${EVAL_TYPE} \
+    framework.start_seed=${SEED} \
+    cinematic_recorder.enabled=True \
+    cinematic_recorder.rotate_speed=0

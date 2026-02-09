@@ -1,0 +1,30 @@
+TASK_NAME="coordinated_lift_ball"
+METHOD="ACT_BC_LANG"
+NUM_DEMOS=200
+IMAGE_SIZE=128
+BATCH_SIZE=16
+DEMO_PATH=$PERACT_BIMANUAL_ROOT/data/rlbench_data/train/coordinated_lift_ball_200_demos_128x128
+MASTER_PORT=20020
+SEED=0
+RUN_NAME="200_demos_${SEED}"
+
+python train.py \
+    method=${METHOD} \
+    method.train_demo_path=${DEMO_PATH} \
+    rlbench.tasks=[${TASK_NAME}] \
+    rlbench.task_name=$(date +"%Y")_$(date +"%m")_$(date +"%d")_$(date +"%H")_$(date +"%M")_${TASK_NAME}_${RUN_NAME} \
+    rlbench.demos=${NUM_DEMOS} \
+    rlbench.demo_path=${DEMO_PATH} \
+    rlbench.episode_length=400 \
+    rlbench.camera_resolution=[${IMAGE_SIZE},${IMAGE_SIZE}] \
+    rlbench.cameras=[wrist_right,wrist_left] \
+    framework.logdir=$PERACT_BIMANUAL_ROOT/logs \
+    framework.training_iterations=260001 \
+    framework.save_freq=2000 \
+    framework.log_freq=2000 \
+    framework.num_weights_to_keep=100 \
+    replay.path=/tmp/arm/replay_${MASTER_PORT} \
+    replay.batch_size=${BATCH_SIZE} \
+    framework.wandb_logging=True \
+    ddp.master_port=${MASTER_PORT} \
+    framework.start_seed=${SEED}

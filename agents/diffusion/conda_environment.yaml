@@ -1,0 +1,11 @@
+name: rlbench
+channels:
+  - pytorch
+  - pytorch3d
+  - nvidia
+  - conda-forge
+dependencies:
+  - diffusers=0.11.1
+  - cmake=3.24.3
+  - pip:
+    - robosuite @ https://github.com/cheng-chi/robosuite/archive/277ab9588ad7a4f4b55cf75508b44aa67ec171f0.tar.gz
