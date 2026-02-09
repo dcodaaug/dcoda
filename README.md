@@ -162,12 +162,14 @@ pip install websockets==13.1
 1. Generate RLBench training data
 ```bash
 cd RLBench/tools
+conda activate rlbench
+
 python dataset_generator_bimanual.py
 ```
 
 2. Convert RLBench training data into D-CODA format
 ```bash
-# make sure you're at dcoda/ before executing the following command
+# make sure you're in dcoda/ before executing the following command
 
 python scripts/convert_dcoda_format_bimanual.py \
 --input_dir=./data/rlbench_data/train/coordinated_lift_ball_100_demos_128x128/coordinated_lift_ball/all_variations/episodes \
@@ -180,7 +182,8 @@ python scripts/convert_dcoda_format_bimanual.py \
 
 3. Train diffusion model
 ```bash
-# make sure you're at dcoda/DMD/src/ before executing the following command
+# make sure you're in dcoda/DMD/src/ before executing the following command
+conda activate dmd-diffusion
 
 python -m torch.distributed.launch --use_env --master_port=25678 scripts/mini_train.py \
 --batch_size 4 \
@@ -197,7 +200,7 @@ python -m torch.distributed.launch --use_env --master_port=25678 scripts/mini_tr
 
 4. Use trained diffusion model to synthesize images
 ```bash
-# make sure you're at dcoda/DMD/src/ before executing the following commands
+# make sure you're in dcoda/DMD/src/ before executing the following commands
 
 python scripts/generate_inference_json_vlms.py \
 --task coordinated_lift_ball --sfm_method orbslam_bimanual \
@@ -216,6 +219,8 @@ python scripts/sample-imgs-multi.py ../instance-data/250125_coordinated_lift_bal
 
 5. Generate corresponding action labels
 ```bash
+# make sure you're in dcoda/DMD/src/ before executing the following command
+
 python scripts/annotate.py --sfm_method orbslam_bimanual \
 --inf_json ../instance-data/250125_coordinated_lift_ball_100_org_data_w_depth_v1_run1/coordinated_lift_ball_dmd_bimanual_v1/data.json \
 --gt_json labels_10_bimanual.json --task_data_json labels_10_bimanual.json \
@@ -226,7 +231,7 @@ python scripts/annotate.py --sfm_method orbslam_bimanual \
 6. Generate the augmented dataset based on the original dataset
 - Before you execute this command, create a new folder (e.g. coordinated_lift_ball_200_demos_128x128) in `dcoda/data/rlbench_data/train` that contains the original demonstrations that you want to apply the data augmentations to.
 ```bash
-# make sure you're at dcoda/ before executing the following command
+# make sure you're in dcoda/ before executing the following command
 
 python scripts/convert_to_rlbench_data_bimanual_v4.py \
 --org_dir=./data/rlbench_data/train/coordinated_lift_ball_200_demos_128x128/coordinated_lift_ball/all_variations/episodes \
@@ -234,11 +239,18 @@ python scripts/convert_to_rlbench_data_bimanual_v4.py \
 ```
 7. Train ACT on the new dataset (original + augmented data)
 ```bash
-# make sure you're at dcoda/ before executing the following command
+# make sure you're in dcoda/ before executing the following command
+conda activate rlbench
+
 ./scripts_train_eval/train_act.sh
 ```
 
 ## Evaluation
+
+```bash
+conda activate rlbench
+# make sure you're in dcoda/ before executing the following commands
+```
 
 Validation:
 
@@ -269,6 +281,10 @@ data/rlbench_data/test/coordinated_lift_ball_25_demos_128x128 \
 ## Acknowledgements
 
 This repository uses code from the following open-source projects:
+#### DMD
+Original: https://github.com/ErinZhang1998/dmd_diffusion
+License: https://github.com/ErinZhang1998/dmd_diffusion?tab=MIT-1-ov-file
+Changes: Adapted for bimanual manipulation.
 
 #### ARM 
 Original:  [https://github.com/stepjam/ARM](https://github.com/stepjam/ARM)  
@@ -306,13 +322,6 @@ Thanks for open-sourcing!
 - [Perceiver PyTorch License (MIT)](https://github.com/lucidrains/perceiver-pytorch/blob/main/LICENSE)
 - [LAMB License (MIT)](https://github.com/cybertronai/pytorch-lamb/blob/master/LICENSE)
 - [CLIP License (MIT)](https://github.com/openai/CLIP/blob/main/LICENSE)
-
-## Release Notes
-
-**Update 2024-07-10**
-
-Initial release
-
 
 ## Citations 
 
