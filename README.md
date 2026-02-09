@@ -282,8 +282,8 @@ data/rlbench_data/test/coordinated_lift_ball_25_demos_128x128 \
 
 This repository uses code from the following open-source projects:
 #### DMD
-Original: https://github.com/ErinZhang1998/dmd_diffusion
-License: https://github.com/ErinZhang1998/dmd_diffusion?tab=MIT-1-ov-file
+Original: [https://github.com/ErinZhang1998/dmd_diffusion](https://github.com/ErinZhang1998/dmd_diffusion)  
+License: [https://github.com/ErinZhang1998/dmd_diffusion?tab=MIT-1-ov-file](https://github.com/ErinZhang1998/dmd_diffusion?tab=MIT-1-ov-file)  
 Changes: Adapted for bimanual manipulation.
 
 #### ARM 
