@@ -2,12 +2,12 @@ CUDA_DEVICE=$1
 TASK_NAME=$2
 METHOD="ACT_BC_LANG"
 IMAGE_SIZE=128
-DEMO_PATH="$PERACT_BIMANUAL_ROOT/$3"
+DEMO_PATH="$3"
 EXP_NAME=$4
 EVAL_TYPE=$5
 SEED=$6
 
-CUDA_VISIBLE_DEVICES=${CUDA_DEVICE} python eval.py \
+DISPLAY=:99 CUDA_VISIBLE_DEVICES=${CUDA_DEVICE} python eval.py \
     method=${METHOD} \
     rlbench.task_name=${EXP_NAME} \
     rlbench.tasks=[${TASK_NAME}] \
@@ -18,7 +18,7 @@ CUDA_VISIBLE_DEVICES=${CUDA_DEVICE} python eval.py \
     rlbench.gripper_mode=BimanualGripperJointPosition \
     rlbench.arm_action_mode=BimanualJointPosition \
     rlbench.action_mode=BimanualJointPositionActionMode \
-    framework.logdir=$PERACT_BIMANUAL_ROOT/logs \
+    framework.logdir=/home/zsh/dcoda/11/logs \
     framework.eval_episodes=25 \
     framework.eval_type=${EVAL_TYPE} \
     framework.start_seed=${SEED}

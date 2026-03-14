@@ -1,0 +1,114 @@
+
+X.Org X Server 1.20.13
+X Protocol Version 11, Revision 0
+Build Operating System: linux Ubuntu
+Current Operating System: Linux gulab-server-A8004 5.15.0-75-generic #82~20.04.1-Ubuntu SMP Wed Jun 7 19:37:37 UTC 2023 x86_64
+Kernel command line: BOOT_IMAGE=/boot/vmlinuz-5.15.0-75-generic root=UUID=c57823d0-6c95-4c6e-aa8b-0963a2dbf7c7 ro quiet splash vt.handoff=7
+Build Date: 19 February 2025  01:54:27PM
+xorg-server 2:1.20.13-1ubuntu1~20.04.19 (For technical support please see http://www.ubuntu.com/support) 
+Current version of pixman: 0.38.4
+	Before reporting problems, check http://wiki.x.org
+	to make sure that you have the latest version.
+Markers: (--) probed, (**) from config file, (==) default setting,
+	(++) from command line, (!!) notice, (II) informational,
+	(WW) warning, (EE) error, (NI) not implemented, (??) unknown.
+(==) Log file: "/var/log/Xorg.99.log", Time: Mon Mar  2 10:33:31 2026
+(==) Using config file: "/etc/X11/xorg.conf"
+(==) Using config directory: "/etc/X11/xorg.conf.d"
+(==) Using system config directory "/usr/share/X11/xorg.conf.d"
+pci id for fd 83: 1a03:2000, driver (null)
+MESA-LOADER: failed to open ast: /usr/lib/dri/ast_dri.so: cannot open shared object file: No such file or directory (search paths /usr/lib/x86_64-linux-gnu/dri:\$${ORIGIN}/dri:/usr/lib/dri, suffix _dri)
+failed to load driver: ast
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+xf86: found device 5
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+(II) Server terminated successfully (0). Closing log file.
+
+X.Org X Server 1.20.13
+X Protocol Version 11, Revision 0
+Build Operating System: linux Ubuntu
+Current Operating System: Linux gulab-server-A8004 5.15.0-75-generic #82~20.04.1-Ubuntu SMP Wed Jun 7 19:37:37 UTC 2023 x86_64
+Kernel command line: BOOT_IMAGE=/boot/vmlinuz-5.15.0-75-generic root=UUID=c57823d0-6c95-4c6e-aa8b-0963a2dbf7c7 ro quiet splash vt.handoff=7
+Build Date: 19 February 2025  01:54:27PM
+xorg-server 2:1.20.13-1ubuntu1~20.04.19 (For technical support please see http://www.ubuntu.com/support) 
+Current version of pixman: 0.38.4
+	Before reporting problems, check http://wiki.x.org
+	to make sure that you have the latest version.
+Markers: (--) probed, (**) from config file, (==) default setting,
+	(++) from command line, (!!) notice, (II) informational,
+	(WW) warning, (EE) error, (NI) not implemented, (??) unknown.
+(==) Log file: "/var/log/Xorg.99.log", Time: Wed Mar  4 19:06:15 2026
+(==) Using config file: "/etc/X11/xorg.conf"
+(==) Using config directory: "/etc/X11/xorg.conf.d"
+(==) Using system config directory "/usr/share/X11/xorg.conf.d"
+pci id for fd 83: 1a03:2000, driver (null)
+MESA-LOADER: failed to open ast: /usr/lib/dri/ast_dri.so: cannot open shared object file: No such file or directory (search paths /usr/lib/x86_64-linux-gnu/dri:\$${ORIGIN}/dri:/usr/lib/dri, suffix _dri)
+failed to load driver: ast
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+xf86: found device 5
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+(II) Server terminated successfully (0). Closing log file.
+
+X.Org X Server 1.20.13
+X Protocol Version 11, Revision 0
+Build Operating System: linux Ubuntu
+Current Operating System: Linux gulab-server-A8004 5.15.0-75-generic #82~20.04.1-Ubuntu SMP Wed Jun 7 19:37:37 UTC 2023 x86_64
+Kernel command line: BOOT_IMAGE=/boot/vmlinuz-5.15.0-75-generic root=UUID=c57823d0-6c95-4c6e-aa8b-0963a2dbf7c7 ro quiet splash vt.handoff=7
+Build Date: 19 February 2025  01:54:27PM
+xorg-server 2:1.20.13-1ubuntu1~20.04.19 (For technical support please see http://www.ubuntu.com/support) 
+Current version of pixman: 0.38.4
+	Before reporting problems, check http://wiki.x.org
+	to make sure that you have the latest version.
+Markers: (--) probed, (**) from config file, (==) default setting,
+	(++) from command line, (!!) notice, (II) informational,
+	(WW) warning, (EE) error, (NI) not implemented, (??) unknown.
+(==) Log file: "/var/log/Xorg.99.log", Time: Thu Mar  5 12:24:04 2026
+(==) Using config file: "/etc/X11/xorg.conf"
+(==) Using config directory: "/etc/X11/xorg.conf.d"
+(==) Using system config directory "/usr/share/X11/xorg.conf.d"
+pci id for fd 83: 1a03:2000, driver (null)
+MESA-LOADER: failed to open ast: /usr/lib/dri/ast_dri.so: cannot open shared object file: No such file or directory (search paths /usr/lib/x86_64-linux-gnu/dri:\$${ORIGIN}/dri:/usr/lib/dri, suffix _dri)
+failed to load driver: ast
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+xf86: found device 5
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+(II) Server terminated successfully (0). Closing log file.
+
+X.Org X Server 1.20.13
+X Protocol Version 11, Revision 0
+Build Operating System: linux Ubuntu
+Current Operating System: Linux gulab-server-A8004 5.15.0-75-generic #82~20.04.1-Ubuntu SMP Wed Jun 7 19:37:37 UTC 2023 x86_64
+Kernel command line: BOOT_IMAGE=/boot/vmlinuz-5.15.0-75-generic root=UUID=c57823d0-6c95-4c6e-aa8b-0963a2dbf7c7 ro quiet splash vt.handoff=7
+Build Date: 19 February 2025  01:54:27PM
+xorg-server 2:1.20.13-1ubuntu1~20.04.19 (For technical support please see http://www.ubuntu.com/support) 
+Current version of pixman: 0.38.4
+	Before reporting problems, check http://wiki.x.org
+	to make sure that you have the latest version.
+Markers: (--) probed, (**) from config file, (==) default setting,
+	(++) from command line, (!!) notice, (II) informational,
+	(WW) warning, (EE) error, (NI) not implemented, (??) unknown.
+(==) Log file: "/var/log/Xorg.99.log", Time: Fri Mar 13 22:50:19 2026
+(==) Using config file: "/etc/X11/xorg.conf"
+(==) Using config directory: "/etc/X11/xorg.conf.d"
+(==) Using system config directory "/usr/share/X11/xorg.conf.d"
+pci id for fd 83: 1a03:2000, driver (null)
+MESA-LOADER: failed to open ast: /usr/lib/dri/ast_dri.so: cannot open shared object file: No such file or directory (search paths /usr/lib/x86_64-linux-gnu/dri:\$${ORIGIN}/dri:/usr/lib/dri, suffix _dri)
+failed to load driver: ast
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+xf86: found device 5
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
+(II) modeset(G3): Initializing kms color map for depth 24, 8 bpc.
