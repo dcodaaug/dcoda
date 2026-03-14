@@ -189,6 +189,7 @@ def main(eval_cfg: DictConfig) -> None:
     )
 
     train_config_path = os.path.join(logdir, "config.yaml")
+    train_config_path = os.path.join('/home/zsh/dcoda', train_config_path)
 
     if os.path.exists(train_config_path):
         with open(train_config_path, "r") as f:

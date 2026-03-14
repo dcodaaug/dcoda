@@ -356,17 +356,7 @@ for i, ep_folder in enumerate(ep_folders):
                 # IK failed for the left arm
                 print('!!!!!!!!!! IK failed for left augmented image at index:', original_image_index)
                 ik_failures += 1
-                # save the left wrist original image to the new directory
-                local_bimanual_obs = copy.deepcopy(low_dim_obs[original_image_index])
-                bimanual_observations.append(local_bimanual_obs)
-
-                save_org_left_right_wrist_images(org_dir, new_dir_for_augmented_images, saved_img_index, original_image_index, depth_npy=args.depth_npy)
-                prev_original_image_index = original_image_index
-                saved_img_index += 1
-
-                # intuition is that the augmented state is most likely a bad one so we want to 
-                # use the intermediate frames in the next frames.
-                continue
+                left_arm_new_joint_positions = left_arm_joint_positions
 
             # get left arm's new gripper pose and matrix
             left_x, left_y, left_z = left_target[0, 0], left_target[0, 1], left_target[0, 2]
@@ -416,14 +406,7 @@ for i, ep_folder in enumerate(ep_folders):
                 # IK failed for the right arm
                 print('!!!!!!!!!! IK failed for right augmented image at index:', original_image_index)
                 ik_failures += 1
-                # save the right wrist original image to the new directory
-                local_bimanual_obs = copy.deepcopy(low_dim_obs[original_image_index])
-                bimanual_observations.append(local_bimanual_obs)
-                
-                save_org_left_right_wrist_images(org_dir, new_dir_for_augmented_images, saved_img_index, original_image_index, depth_npy=args.depth_npy)
-                prev_original_image_index = original_image_index
-                saved_img_index += 1
-                continue
+                right_arm_new_joint_positions = right_arm_joint_positions
 
             # get right arm's new gripper pose and matrix
             right_x, right_y, right_z = right_target[0, 0], right_target[0, 1], right_target[0, 2]
@@ -480,17 +463,7 @@ for i, ep_folder in enumerate(ep_folders):
                 # robot.left_arm.solve_ik_via_sampling([left_x, left_y, left_z], ignore_collisions=True, max_time_ms=100, quaternion=left_quaternion)[0]
                 print('!!!!!!!!!! IK failed for left augmented image at index:', original_image_index)
                 ik_failures += 1
-                # save the left wrist original image to the new directory
-                local_bimanual_obs = copy.deepcopy(low_dim_obs[original_image_index])
-                bimanual_observations.append(local_bimanual_obs)
-
-                save_org_left_right_wrist_images(org_dir, new_dir_for_augmented_images, saved_img_index, original_image_index, depth_npy=args.depth_npy)
-                prev_original_image_index = original_image_index
-                saved_img_index += 1
-
-                # intuition is that the augmented state is most likely a bad one so we want to 
-                # use the intermediate frames in the next frames.
-                continue
+                left_arm_new_joint_positions = left_arm_joint_positions
 
             robot.left_arm.set_joint_positions(left_arm_new_joint_positions, disable_dynamics=True)
             # get left arm's new gripper pose and matrix
@@ -539,14 +512,7 @@ for i, ep_folder in enumerate(ep_folders):
             except:
                 print('!!!!!!!!!! IK failed for right augmented image at index:', original_image_index)
                 ik_failures += 1
-                # save the right wrist original image to the new directory
-                local_bimanual_obs = copy.deepcopy(low_dim_obs[original_image_index])
-                bimanual_observations.append(local_bimanual_obs)
-                
-                save_org_left_right_wrist_images(org_dir, new_dir_for_augmented_images, saved_img_index, original_image_index, depth_npy=args.depth_npy)
-                prev_original_image_index = original_image_index
-                saved_img_index += 1
-                continue
+                right_arm_new_joint_positions = right_arm_joint_positions
 
             robot.right_arm.set_joint_positions(right_arm_new_joint_positions, disable_dynamics=True)
             # get right arm's new gripper pose and matrix
