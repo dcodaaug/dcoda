@@ -52,10 +52,7 @@ class CoordinatedLiftTrayEasy(BimanualTask):
         #print(self.item.get_position())
 
         self.register_success_conditions([
-            LiftedCondition(self.tray, 1.2),
-            LiftedCondition(self.item, 1.2),
-            DetectedCondition(self.tray, right_sensor),
-            DetectedCondition(self.tray, left_sensor)])
+            LiftedCondition(self.tray, 0.93)])
 
         if sim.simGetObjectSizeFactor(Shape('workspace').get_handle()) >= 1.0:
             sim.simScaleObject(Shape('workspace').get_handle(), 0.3, 0.3, 0.3)

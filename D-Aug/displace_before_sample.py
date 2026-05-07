@@ -7,13 +7,13 @@ import numpy as np
 import torch
 
 
-DEVICE = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
 GRID_CACHE = {}
 MAX_RECORDS = 5000
 
 DATA_JSON_PATH = Path(
     "/home/zsh/dcoda/DMD/instance-data/"
-    "260310_coordinated_lift_ball_100_org_data_w_depth_v1_run1/"
+    "260409_coordinated_lift_ball_100_org_data_w_depth_v1_run1/"
     "coordinated_lift_ball_dmd_bimanual_v1/data.json"
 )
 OUTPUT_DIR = DATA_JSON_PATH.parent / "displaced_all"

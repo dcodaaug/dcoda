@@ -14,11 +14,11 @@
 
 
 python /home/zsh/dcoda/DMD/src/scripts/sample-imgs-multi-D-Aug.py \
-  /home/zsh/dcoda/DMD/instance-data/260310_coordinated_lift_ball_100_org_data_w_depth_v1_run1/coordinated_lift_ball_dmd_bimanual_v1/data.json \
+  /home/zsh/dcoda/DMD/instance-data/debug/coordinated_lift_ball_dmd_bimanual_v1/data.json \
   --sfm_method orbslam_bimanual \
   -s 500 \
-  --gpus 3 \
+  --gpus 2,3 \
   --batch_size 32 \
   --sampler_mode notebook \
   --model /nas/datasets/zsh/MVDA_ckpts/d-aug_co_lift_ball/checkpoints/0100-00000000.pth \
-  --cond_img_folder /home/zsh/dcoda/DMD/instance-data/260310_coordinated_lift_ball_100_org_data_w_depth_v1_run1/coordinated_lift_ball_dmd_bimanual_v1/displaced_all \
+  --cond_img_folder /home/zsh/dcoda/DMD/instance-data/debug/coordinated_lift_ball_dmd_bimanual_v1/displaced_all \

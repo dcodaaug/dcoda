@@ -11,7 +11,7 @@ import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import torch
 
-DEVICE = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 _GRID_CACHE = {}
 
 def _get_uv_grid(h, w, device):
@@ -228,11 +228,11 @@ if __name__ == "__main__":
     ctx = mp.get_context("spawn")
     
     # all parameters except for gpu
-    num_demo = 25
-    num_data = 500 # 50000
-    lmdb_path = '/home/zsh/dcoda/D-Aug/data/co_lift_ball_test.lmdb'
-    data_path = '/home/zsh/dcoda/RLBench/tools/data/rlbench_data_test/coordinated_lift_ball/all_variations/episodes'
-    lower_bound = 0.02
+    num_demo = 100
+    num_data = 50000 # 50000
+    lmdb_path = '/home/zsh/dcoda/D-Aug/data/bi_straitn_rope.lmdb'
+    data_path = '/home/zsh/dcoda/RLBench/tools/data/rlbench_data/bimanual_straighten_rope/all_variations/episodes'
+    lower_bound = 0.01
     upper_bound = 0.05
     angle_range = 0.5
     cutoff_index = 50

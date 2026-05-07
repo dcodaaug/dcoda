@@ -154,6 +154,48 @@ def quaternion_to_rotation_matrix(q):
 
     return R
 
+
+def smooth_quaternion(prev_quat, curr_quat, alpha):
+    prev_quat = np.asarray(prev_quat, dtype=np.float64)
+    curr_quat = np.asarray(curr_quat, dtype=np.float64)
+
+    # Keep interpolation on the shortest path in quaternion space.
+    if np.dot(prev_quat, curr_quat) < 0:
+        curr_quat = -curr_quat
+
+    blended = (1 - alpha) * prev_quat + alpha * curr_quat
+    norm = np.linalg.norm(blended)
+    if norm < 1e-8:
+        return curr_quat
+    return blended / norm
+
+
+def smooth_pose_matrix(curr_pose, prev_pose, alpha):
+    alpha = float(np.clip(alpha, 0.0, 1.0))
+    curr_pose = np.asarray(curr_pose, dtype=np.float64)
+    if prev_pose is None or alpha >= 1.0:
+        return curr_pose.copy()
+
+    prev_pose = np.asarray(prev_pose, dtype=np.float64)
+    smoothed_pose = np.eye(4)
+    smoothed_pose[:3, 3] = alpha * curr_pose[:3, 3] + (1 - alpha) * prev_pose[:3, 3]
+
+    prev_quat = R.from_matrix(prev_pose[:3, :3]).as_quat()
+    curr_quat = R.from_matrix(curr_pose[:3, :3]).as_quat()
+    smoothed_quat = smooth_quaternion(prev_quat, curr_quat, alpha)
+    smoothed_pose[:3, :3] = R.from_quat(smoothed_quat).as_matrix()
+    return smoothed_pose
+
+
+def smooth_joint_positions(curr_joint_positions, prev_joint_positions, alpha):
+    alpha = float(np.clip(alpha, 0.0, 1.0))
+    curr_joint_positions = np.asarray(curr_joint_positions, dtype=np.float64)
+    if prev_joint_positions is None or alpha >= 1.0:
+        return curr_joint_positions.copy()
+
+    prev_joint_positions = np.asarray(prev_joint_positions, dtype=np.float64)
+    return alpha * curr_joint_positions + (1 - alpha) * prev_joint_positions
+
 # Create ArgumentParser object
 parser = argparse.ArgumentParser(description='A simple script that greets the user.')
 
@@ -165,6 +207,12 @@ parser.add_argument('--filter', action='store_true', help='Filter out states wit
 parser.add_argument('--filter_t', type=int, default=-1, help="Any states with timesteps greater than filter_t will be filtered out")
 parser.add_argument('--depth_npy', action='store_true', help='Depth images are in .npy format')
 parser.add_argument('--ik_debug', action='store_true', help='Print per-attempt IK diagnostics')
+parser.add_argument('--pose_smoothing_alpha', type=float, default=0.8,
+                    help='Pose smoothing factor in [0,1] before IK; 1.0 disables smoothing')
+parser.add_argument('--left_joint_smoothing_alpha', type=float, default=0.4,
+                    help='Left-arm joint smoothing factor in [0,1] after IK; 1.0 disables smoothing')
+parser.add_argument('--right_joint_smoothing_alpha', type=float, default=0.4,
+                    help='Right-arm joint smoothing factor in [0,1] after IK; 1.0 disables smoothing')
 
 # Parse the arguments
 args = parser.parse_args()
@@ -227,165 +275,188 @@ for i, ep_folder in enumerate(ep_folders):
     new_dir_wrist_right_rgb_dir = os.path.join(new_dir_for_augmented_images, 'wrist_right_rgb')
 
     bimanual_observations = []
-    prev_original_image_index = -1
     ik_failures = 0
     saved_img_index = 0
-    save_org_frames = True
-    # for (w_l_aug_image_name, w_l_aug_image_data), (w_r_aug_image_name, w_r_aug_image_data) in zip(sorted(w_l_filtered_cur_traj_json.items()), sorted(w_r_filtered_cur_traj_json.items())):
-    for w_l_aug_image_name, w_r_aug_image_name in zip(sorted(w_l_filtered_cur_traj_json.keys()), sorted(w_r_filtered_cur_traj_json.keys())):
-        w_l_aug_image_data = w_l_filtered_cur_traj_json[w_l_aug_image_name]
-        w_r_aug_image_data = w_r_filtered_cur_traj_json[w_r_aug_image_name]
-        original_image_index = int(w_l_aug_image_data[3].split('.')[0].split('_')[-1])
+    prev_smoothed_left_wrist_cam_aug_pose = None
+    prev_smoothed_right_wrist_cam_aug_pose = None
+    prev_smoothed_left_joint_positions = None
+    prev_smoothed_right_joint_positions = None
+    prev_output_left_joint_positions = None
+    prev_output_right_joint_positions = None
+    left_aug_by_idx = {}
+    right_aug_by_idx = {}
+    for w_l_aug_image_name, w_l_aug_image_data in w_l_filtered_cur_traj_json.items():
+        idx = int(w_l_aug_image_data[3].split('.')[0].split('_')[-1])
+        left_aug_by_idx[idx] = (w_l_aug_image_name, w_l_aug_image_data)
+    for w_r_aug_image_name, w_r_aug_image_data in w_r_filtered_cur_traj_json.items():
+        idx = int(w_r_aug_image_data[3].split('.')[0].split('_')[-1])
+        right_aug_by_idx[idx] = (w_r_aug_image_name, w_r_aug_image_data)
 
-        assert int(w_l_aug_image_data[3].split('.')[0].split('_')[-1]) == int(w_r_aug_image_data[3].split('.')[0].split('_')[-1])
+    assert set(left_aug_by_idx.keys()) == set(right_aug_by_idx.keys()), 'Left and right augmented frame indices do not match'
+    aug_indices = sorted(set(left_aug_by_idx.keys()) & set(right_aug_by_idx.keys()), reverse=True)
+    aug_indices = [idx for idx in aug_indices if 0 <= idx < total_timesteps]
 
-        if original_image_index == 0:
-            # save the first frame as is
-            save_org_left_right_wrist_images(org_dir, new_dir_for_augmented_images, saved_img_index, 0, depth_npy=args.depth_npy)
-            saved_img_index += 1
-            prev_original_image_index = 0
-            continue
+    augmented_obs_by_idx = {}
+    augmented_img_names_by_idx = {}
 
-        # copy (prev_original_image_index+1) state up to (and excluding) original_image_index state's bimanual observations and add them to the list
-        # print(f'prev_original_image_index: {prev_original_image_index}, original_image_index: {original_image_index}') # for debugging
-        for j in range(prev_original_image_index+1, original_image_index):
-            # print('Original observation index:', j)
-            local_bimanual_obs = copy.deepcopy(low_dim_obs[j])
-            bimanual_observations.append(local_bimanual_obs)
-            save_org_left_right_wrist_images(org_dir, new_dir_for_augmented_images, saved_img_index, j, depth_npy=args.depth_npy)
-            saved_img_index += 1
+    if len(aug_indices) > 0:
+        seed_index = 50 if total_timesteps > 50 else min(max(aug_indices) + 1, total_timesteps - 1)
+        prev_output_left_joint_positions = np.asarray(low_dim_obs[seed_index].left.joint_positions, dtype=np.float64).copy()
+        prev_output_right_joint_positions = np.asarray(low_dim_obs[seed_index].right.joint_positions, dtype=np.float64).copy()
 
-        # NOTE: here we assume that only joint positions and end-effector pose are modified and different from the original data
+    # Reverse solve 49->0, seeded by real step50 joints for better stitching with following original frames.
+    for original_image_index in aug_indices:
+        w_l_aug_image_name, w_l_aug_image_data = left_aug_by_idx[original_image_index]
+        w_r_aug_image_name, w_r_aug_image_data = right_aug_by_idx[original_image_index]
 
         #################### left arm ####################
-        # get the original left arm positions
-        left_arm_joint_positions = low_dim_obs[original_image_index].left.joint_positions
+        left_arm_joint_positions = prev_output_left_joint_positions.copy()
+        right_arm_joint_positions = prev_output_right_joint_positions.copy()
         left_arm_left_wrist_cam_pose = low_dim_obs[original_image_index].perception_data['wrist_left_pose']
-        # make sure the robot joints are in the same position as the original data
+
         robot.left_arm.set_joint_positions(left_arm_joint_positions, disable_dynamics=True)
+        robot.right_arm.set_joint_positions(right_arm_joint_positions, disable_dynamics=True)
         step_in_pyrep(pyrep)
 
-        # get left-wrist augmented image's position and orientation (in left wrist's camera frame)
         left_wrist_aug_transform = np.eye(4)
         left_wrist_aug_transform[:3,:3] = w_l_aug_image_data[6]
         left_wrist_aug_transform[:3,3] = w_l_aug_image_data[5]
         left_wrist_aug_transform = from_blender_frame(left_wrist_aug_transform)
 
-        # transform current (I_t) left-wrist cam frame to left-wrist augmented cam frame (I^{tilde}_t)
         left_arm_left_wrist_cam_aug_pose = np.dot(left_wrist_aug_transform, left_arm_left_wrist_cam_pose)
-        # transform left-wrist cam frame to left end-effector frame
+        left_arm_left_wrist_cam_aug_pose = smooth_pose_matrix(
+            left_arm_left_wrist_cam_aug_pose,
+            prev_smoothed_left_wrist_cam_aug_pose,
+            args.pose_smoothing_alpha,
+        )
+        prev_smoothed_left_wrist_cam_aug_pose = left_arm_left_wrist_cam_aug_pose.copy()
+
         t_left_wrist_cam_to_left_eff = np.dot(np.linalg.inv(low_dim_obs[original_image_index].perception_data['wrist_left_pose']), low_dim_obs[original_image_index].left.gripper_matrix)
-        # transform left-wrist augmented cam frame (I^{tilde}_t) to its end-effector frame
         left_eff_frame = np.dot(left_arm_left_wrist_cam_aug_pose, t_left_wrist_cam_to_left_eff)
-        # get the new left end-effector position and orientation
+
         left_x, left_y, left_z = left_eff_frame[:3,3]
         left_rotation_matrix_eff_frame = left_eff_frame[:3,:3]
         left_rotation = R.from_matrix(left_rotation_matrix_eff_frame)
         left_quaternion = left_rotation.as_quat()
 
-        # use IK to figure out new joint positions
+        left_ik_succeeded = True
         try:
-            left_arm_new_joint_positions = robot.left_arm.solve_ik_via_sampling([left_x, left_y, left_z], quaternion=left_quaternion)[0]
+            left_arm_new_joint_positions = robot.left_arm.solve_ik_via_sampling([left_x, left_y, left_z], quaternion=left_quaternion, ignore_collisions=True, distance_threshold=1.4, max_configs=30, trials=100)[0]
         except:
-            # for debugging purposes
-            # robot.left_arm.get_tip().get_quaternion()
-            # robot.left_arm.solve_ik_via_sampling([left_x, left_y, left_z], quaternion=robot.left_arm.get_tip().get_quaternion())[0]
-            # robot.left_arm.solve_ik_via_sampling(robot.left_arm.get_tip().get_position(), quaternion=left_quaternion)[0]
-            # robot.left_arm.solve_ik_via_sampling([left_x, left_y, left_z], ignore_collisions=True, max_time_ms=100, quaternion=left_quaternion)[0]
             print('!!!!!!!!!! IK failed for left augmented image at index:', original_image_index)
             ik_failures += 1
-            left_arm_new_joint_positions = left_arm_joint_positions
+            left_ik_succeeded = False
+            left_arm_new_joint_positions = np.asarray(
+                low_dim_obs[original_image_index].left.joint_positions,
+                dtype=np.float64,
+            ).copy()
+
+        if left_ik_succeeded:
+            left_arm_new_joint_positions = smooth_joint_positions(
+                left_arm_new_joint_positions,
+                prev_smoothed_left_joint_positions,
+                args.left_joint_smoothing_alpha,
+            )
+        prev_smoothed_left_joint_positions = left_arm_new_joint_positions.copy()
 
         robot.left_arm.set_joint_positions(left_arm_new_joint_positions, disable_dynamics=True)
-        # get left arm's new gripper pose and matrix
         left_arm_new_gripper_pose = [left_x, left_y, left_z, *left_quaternion]
         left_arm_new_gripper_matrix = np.eye(4)
         left_arm_new_gripper_matrix[:3,:3] = left_rotation_matrix_eff_frame
         left_arm_new_gripper_matrix[:3,3] = [left_x, left_y, left_z]
 
-        # save the left wrist augmented image to the new directory
-        dest_aug_left_wrist_img_path = os.path.join(new_dir_wrist_left_rgb_dir, f"rgb_{saved_img_index:04}.png")
-        # dest_aug_left_wrist_img_path = os.path.join(new_dir_wrist_left_rgb_dir, f"rgb_{saved_img_index:04}_aug.png") # for debugging
-        aug_left_wrist_img = Image.open(os.path.join(args.action_labels_dir, traj_folders[i], 'images', w_l_aug_image_name))
-        # NOTE: we assume the original images are 128x128
-        aug_left_wrist_img = aug_left_wrist_img.resize((128, 128))
-        aug_left_wrist_img.save(dest_aug_left_wrist_img_path)
-
         #################### right arm ####################
-        # get the original right arm positions
-        right_arm_joint_positions = low_dim_obs[original_image_index].right.joint_positions
-        right_arm_right_wrist_cam_pose = low_dim_obs[original_image_index].perception_data['wrist_right_pose']
-        # make sure the robot joints are in the same position as the original data
+        robot.left_arm.set_joint_positions(left_arm_joint_positions, disable_dynamics=True)
         robot.right_arm.set_joint_positions(right_arm_joint_positions, disable_dynamics=True)
         step_in_pyrep(pyrep)
 
-        # get right-wrist augmented image's position and orientation (in right wrist's camera frame)
+        right_arm_right_wrist_cam_pose = low_dim_obs[original_image_index].perception_data['wrist_right_pose']
+
         right_wrist_aug_transform = np.eye(4)
         right_wrist_aug_transform[:3,:3] = w_r_aug_image_data[6]
         right_wrist_aug_transform[:3,3] = w_r_aug_image_data[5]
         right_wrist_aug_transform = from_blender_frame(right_wrist_aug_transform)
 
-        # transform current (I_t) right-wrist cam frame to right-wrist augmented cam frame (I^{tilde}_t)
         right_arm_right_wrist_cam_aug_pose = np.dot(right_wrist_aug_transform, right_arm_right_wrist_cam_pose)
-        # transform right-wrist cam frame to right end-effector frame
+        right_arm_right_wrist_cam_aug_pose = smooth_pose_matrix(
+            right_arm_right_wrist_cam_aug_pose,
+            prev_smoothed_right_wrist_cam_aug_pose,
+            args.pose_smoothing_alpha,
+        )
+        prev_smoothed_right_wrist_cam_aug_pose = right_arm_right_wrist_cam_aug_pose.copy()
+
         t_right_wrist_cam_to_right_eff = np.dot(np.linalg.inv(low_dim_obs[original_image_index].perception_data['wrist_right_pose']), low_dim_obs[original_image_index].right.gripper_matrix)
-        # transform right-wrist augmented cam frame (I^{tilde}_t) to its end-effector frame
         right_eff_frame = np.dot(right_arm_right_wrist_cam_aug_pose, t_right_wrist_cam_to_right_eff)
-        # get the new right end-effector position and orientation
+
         right_x, right_y, right_z = right_eff_frame[:3,3]
         right_rotation_matrix_eff_frame = right_eff_frame[:3,:3]
         right_rotation = R.from_matrix(right_rotation_matrix_eff_frame)
         right_quaternion = right_rotation.as_quat()
 
-        # use IK to figure out new joint positions
+        right_ik_succeeded = True
         try:
-            right_arm_new_joint_positions = robot.right_arm.solve_ik_via_sampling([right_x, right_y, right_z], quaternion=right_quaternion)[0]
+            right_arm_new_joint_positions = robot.right_arm.solve_ik_via_sampling([right_x, right_y, right_z], quaternion=right_quaternion, ignore_collisions=True, distance_threshold=1.4, max_configs=30, trials=100)[0]
         except:
             print('!!!!!!!!!! IK failed for right augmented image at index:', original_image_index)
             ik_failures += 1
-            right_arm_new_joint_positions = right_arm_joint_positions
+            right_ik_succeeded = False
+            right_arm_new_joint_positions = np.asarray(
+                low_dim_obs[original_image_index].right.joint_positions,
+                dtype=np.float64,
+            ).copy()
+
+        if right_ik_succeeded:
+            right_arm_new_joint_positions = smooth_joint_positions(
+                right_arm_new_joint_positions,
+                prev_smoothed_right_joint_positions,
+                args.right_joint_smoothing_alpha,
+            )
+        prev_smoothed_right_joint_positions = right_arm_new_joint_positions.copy()
 
         robot.right_arm.set_joint_positions(right_arm_new_joint_positions, disable_dynamics=True)
-        # get right arm's new gripper pose and matrix
         right_arm_new_gripper_pose = [right_x, right_y, right_z, *right_quaternion]
         right_arm_new_gripper_matrix = np.eye(4)
         right_arm_new_gripper_matrix[:3,:3] = right_rotation_matrix_eff_frame
         right_arm_new_gripper_matrix[:3,3] = [right_x, right_y, right_z]
 
-        # save the right wrist augmented image to the new directory
-        dest_aug_right_wrist_img_path = os.path.join(new_dir_wrist_right_rgb_dir, f"rgb_{saved_img_index:04}.png")
-        # dest_aug_right_wrist_img_path = os.path.join(new_dir_wrist_right_rgb_dir, f"rgb_{saved_img_index:04}_aug.png") # for debugging
-        aug_right_wrist_img = Image.open(os.path.join(args.action_labels_dir, traj_folders[i], 'images', w_r_aug_image_name))
-        # NOTE: we assume the original images are 128x128
-        aug_right_wrist_img = aug_right_wrist_img.resize((128, 128))
-        aug_right_wrist_img.save(dest_aug_right_wrist_img_path)
-        # print('augmented observation index:', original_image_index)
-        saved_img_index += 1
-
-        # We need to update right, left, perception_data, and misc. Ignore task_low_dim_state because it's not used. Ignore misc because nothing needs to be updated.
-        # step 1: copy the original data
         bimanual_obs = copy.deepcopy(low_dim_obs[original_image_index])
-        # step 2: update left and right objects' arm joint_positions, gripper_pose, gripper_matrix
         bimanual_obs.left.joint_positions = left_arm_new_joint_positions
         bimanual_obs.left.gripper_pose = left_arm_new_gripper_pose
         bimanual_obs.left.gripper_matrix = left_arm_new_gripper_matrix
         bimanual_obs.right.joint_positions = right_arm_new_joint_positions
         bimanual_obs.right.gripper_pose = right_arm_new_gripper_pose
         bimanual_obs.right.gripper_matrix = right_arm_new_gripper_matrix
-        # step 3: update the perception_data, specifically "wrist_left_pose," which is the left wrist camera pose, and "wrist_right_pose"
         bimanual_obs.perception_data['wrist_left_pose'] = left_arm_left_wrist_cam_aug_pose
         bimanual_obs.perception_data['wrist_right_pose'] = right_arm_right_wrist_cam_aug_pose
 
-        bimanual_observations.append(bimanual_obs)
-        prev_original_image_index = original_image_index
+        augmented_obs_by_idx[original_image_index] = bimanual_obs
+        augmented_img_names_by_idx[original_image_index] = (w_l_aug_image_name, w_r_aug_image_name)
+
+        prev_output_left_joint_positions = np.asarray(left_arm_new_joint_positions, dtype=np.float64).copy()
+        prev_output_right_joint_positions = np.asarray(right_arm_new_joint_positions, dtype=np.float64).copy()
 
     total_ik_failures[curr_folder] = ik_failures
 
-    # add the remaining observations to the list
-    for j in range(prev_original_image_index+1, total_timesteps):
-        local_bimanual_obs = copy.deepcopy(low_dim_obs[j])
-        bimanual_observations.append(local_bimanual_obs)
-        save_org_left_right_wrist_images(org_dir, new_dir_for_augmented_images, saved_img_index, j, depth_npy=args.depth_npy) 
+    # Write final trajectory in chronological order.
+    for j in range(total_timesteps):
+        if j in augmented_obs_by_idx:
+            bimanual_observations.append(augmented_obs_by_idx[j])
+
+            w_l_aug_image_name, w_r_aug_image_name = augmented_img_names_by_idx[j]
+            dest_aug_left_wrist_img_path = os.path.join(new_dir_wrist_left_rgb_dir, f"rgb_{saved_img_index:04}.png")
+            aug_left_wrist_img = Image.open(os.path.join(args.action_labels_dir, traj_folders[i], 'images', w_l_aug_image_name))
+            aug_left_wrist_img = aug_left_wrist_img.resize((128, 128))
+            aug_left_wrist_img.save(dest_aug_left_wrist_img_path)
+
+            dest_aug_right_wrist_img_path = os.path.join(new_dir_wrist_right_rgb_dir, f"rgb_{saved_img_index:04}.png")
+            aug_right_wrist_img = Image.open(os.path.join(args.action_labels_dir, traj_folders[i], 'images', w_r_aug_image_name))
+            aug_right_wrist_img = aug_right_wrist_img.resize((128, 128))
+            aug_right_wrist_img.save(dest_aug_right_wrist_img_path)
+        else:
+            local_bimanual_obs = copy.deepcopy(low_dim_obs[j])
+            bimanual_observations.append(local_bimanual_obs)
+            save_org_left_right_wrist_images(org_dir, new_dir_for_augmented_images, saved_img_index, j, depth_npy=args.depth_npy)
+
         saved_img_index += 1
 
     # NOTE: here, we assume the new demo has the same number of observations as the original demo

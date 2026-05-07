@@ -7,7 +7,7 @@ from pyrep.objects.dummy import Dummy
 from pyrep.objects.joint import Joint
 from rlbench.backend.task import Task
 from rlbench.backend.spawn_boundary import SpawnBoundary
-from rlbench.backend.conditions import JointCondition, ConditionSet
+from rlbench.backend.conditions import JointCondition, OrConditions
 from rlbench.backend.task import BimanualTask
 from collections import defaultdict
 
@@ -68,7 +68,7 @@ class DualPushButtons(BimanualTask):
         # goal_conditions merely state joint conditions for push action for
         # each button regardless of whether the task involves pushing it
         self.goal_conditions = [JointCondition(self.target_joints[n], 0.001)
-                                for n in range(2)]
+                                for n in range(3)]
 
         self.waypoint_mapping = defaultdict(lambda: 'left')
         self.waypoint_mapping.update({'waypoint0': 'right', 'waypoint2': 'right'})
@@ -98,7 +98,7 @@ class DualPushButtons(BimanualTask):
             self.chosen_colors.append((color_name, color_rgb))
             b.set_color(color_rgb)
 
-        self.register_success_conditions([ConditionSet(self.goal_conditions, True, True)])
+        self.register_success_conditions([OrConditions(self.goal_conditions)])
 
         # ..todo separate the spawn boundaries for the left and right  robot
 

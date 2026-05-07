@@ -974,11 +974,15 @@ def main(args):
                 raise NotImplementedError
             
             if args.load_depth_npy:
-                left_wrist_depth_img_path = f'{left_full_img_path.split(".jpg")[0]}_depth.npy'
-                right_wrist_depth_img_path = f'{right_full_img_path.split(".jpg")[0]}_depth.npy'
+                left_base_path = os.path.splitext(left_full_img_path)[0]
+                right_base_path = os.path.splitext(right_full_img_path)[0]
+                left_wrist_depth_img_path = f'{left_base_path}_depth.npy'
+                right_wrist_depth_img_path = f'{right_base_path}_depth.npy'
             else:
-                left_wrist_depth_img_path = f'{left_full_img_path.split(".jpg")[0]}_depth.png'
-                right_wrist_depth_img_path = f'{right_full_img_path.split(".jpg")[0]}_depth.png'
+                left_base_path = os.path.splitext(left_full_img_path)[0]
+                right_base_path = os.path.splitext(right_full_img_path)[0]
+                left_wrist_depth_img_path = f'{left_base_path}_depth.png'
+                right_wrist_depth_img_path = f'{right_base_path}_depth.png'
             if args.no_opt:
                 # contact is always false because we don't want to use constrained optimization for contact-rich states
                 contact = False

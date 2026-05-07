@@ -554,7 +554,7 @@ def main(args):
         x_euler_range = [-0, 0]
         y_euler_range = [-0, 0]
         z_euler_range = [-0, 0]
-        magnitude_l, magnitude_u = 0.08,0.15
+        magnitude_l, magnitude_u = 0.03,0.05
 
         episode_start_delta_X_left = random.uniform(magnitude_l, magnitude_u)*random.choice([-1, 1])
         episode_start_delta_Y_left = random.uniform(magnitude_l, magnitude_u)*random.choice([-1, 1])

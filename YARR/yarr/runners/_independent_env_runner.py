@@ -1,6 +1,7 @@
 import copy
 import logging
 import os
+import random
 import time
 import pandas as pd
 
@@ -116,7 +117,8 @@ class _IndependentEnvRunner(_EnvRunner):
                               eval=True,
                               device_idx=0,
                               save_metrics=True,
-                              cinematic_recorder_cfg=None):
+                              cinematic_recorder_cfg=None,
+                              process_seed=None):
 
         self._name = name
         self._save_metrics = save_metrics
@@ -129,7 +131,15 @@ class _IndependentEnvRunner(_EnvRunner):
             self._agent.build(training=False, device=device)
 
         logging.info('%s: Launching env.' % name)
-        np.random.seed()
+        if process_seed is None:
+            np.random.seed()
+        else:
+            random.seed(process_seed)
+            np.random.seed(process_seed)
+            torch.manual_seed(process_seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(process_seed)
+            logging.info('%s: Using process seed %d.', name, process_seed)
 
         logging.info('Agent information:')
         logging.info(self._agent)
