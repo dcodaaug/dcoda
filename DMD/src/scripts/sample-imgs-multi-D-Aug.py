@@ -1,5 +1,6 @@
 import os
 import pathlib
+import re
 import sys
 
 script_path = os.path.dirname(os.path.realpath(sys.argv[0]))
@@ -43,6 +44,12 @@ argParser.add_argument("--gripper_state", action="store_true", help="Whether to 
 argParser.add_argument("--stable_diffusion_encoder", action="store_true", help="Whether to use stable diffusion encoder rather than the VQGAN")
 argParser.add_argument("--external_gpu", action="store_true", help="Whether to use the external GPU to train")
 argParser.add_argument('--image_size', type=int, default=128, help="image size")
+argParser.add_argument('--sampler_mode', choices=['legacy', 'notebook'], default='notebook', help="Sampling mode for orbslam_bimanual")
+argParser.add_argument('--im_b_root', type=str, default=None, help="Root folder of conditioning im_b images, e.g. .../displaced_all")
+argParser.add_argument('--cond_img_folder', type=str, default=None, help="Folder containing condition images (e.g. 000003_left.png, 000070_right.png). Overrides JSON conditioning images.")
+argParser.add_argument('--use_ema', action='store_true', help="Use EMA weights if present in checkpoint")
+argParser.add_argument('--wandb_project', type=str, default=None, help="Wandb project name. If set, enables wandb logging.")
+argParser.add_argument('--wandb_run_name', type=str, default=None, help="Wandb run name")
 cli_args = argParser.parse_args()
 global_sfm_method = cli_args.sfm_method
 assert cli_args.model is not None
@@ -110,6 +117,94 @@ def crop_like_dataset(frame_a):
 	im_a = Image.fromarray(frame_a_cropped).resize((256,256))
 	return np.asarray(im_a)
 
+def _extract_index_from_path(path_str):
+	if path_str is None:
+		return None
+	name = os.path.basename(path_str)
+	patterns = [
+		r'left_(\d+)\.png$',
+		r'right_(\d+)\.png$',
+		r'(\d+)_left\.png$',
+		r'(\d+)_right\.png$',
+	]
+	for pattern in patterns:
+		m = re.search(pattern, name)
+		if m:
+			return int(m.group(1))
+	return None
+
+def _resolve_cond_from_folder(el, arm):
+	"""Look up a conditioning image from --cond_img_folder by extracting index from el."""
+	for key in [f'{arm}_output', f'{arm}_img', f'{arm}_im_b', 'output', 'img']:
+		idx = _extract_index_from_path(el.get(key))
+		if idx is not None:
+			break
+	if idx is None:
+		raise FileNotFoundError(
+			f'Cannot extract index for arm={arm} from element to look up in cond_img_folder'
+		)
+	for fmt in [f'{idx:06d}_{arm}.png', f'{idx:09d}_{arm}.png']:
+		path = os.path.join(cli_args.cond_img_folder, fmt)
+		if os.path.exists(path):
+			return path
+	raise FileNotFoundError(
+		f'Cannot find {idx:06d}_{arm}.png or {idx:09d}_{arm}.png in {cli_args.cond_img_folder}'
+	)
+
+def _resolve_condition_path(el, arm):
+	assert arm in ('left', 'right')
+
+	if cli_args.cond_img_folder is not None:
+		return _resolve_cond_from_folder(el, arm)
+
+	keys = [
+		f'{arm}_im_b',
+		f'im_b_{arm}',
+		f'{arm}_im_b_path',
+		f'{arm}_condition_img',
+		f'{arm}_img',
+	]
+	for key in keys:
+		if key in el and el[key] and os.path.exists(el[key]):
+			return el[key]
+
+	if cli_args.im_b_root is not None:
+		idx = _extract_index_from_path(el.get(f'{arm}_output'))
+		if idx is None:
+			idx = _extract_index_from_path(el.get(f'{arm}_img'))
+		if idx is not None:
+			candidates = [
+				os.path.join(cli_args.im_b_root, f'{idx:06d}_{arm}.png'),
+				os.path.join(cli_args.im_b_root, f'{idx:09d}_{arm}.png'),
+			]
+			for path in candidates:
+				if os.path.exists(path):
+					return path
+
+	raise FileNotFoundError(
+		f'Cannot resolve conditioning im_b path for arm={arm}. '
+		f'Please provide existing {arm}_im_b in config or --im_b_root.'
+	)
+
+# shared state for wandb logging across processes
+_wandb_counter = None  # multiprocessing.Value
+_wandb_total = None
+_wandb_start_time = None
+
+def _init_wandb_worker(counter, total, start_time):
+	"""Initializer for pool workers to set shared wandb state."""
+	global _wandb_counter, _wandb_total, _wandb_start_time
+	_wandb_counter = counter
+	_wandb_total = total
+	_wandb_start_time = start_time
+
+def _log_wandb_progress(num_new_images):
+	"""Atomically increment counter. Wandb logging is done by the monitor thread in the main process."""
+	if _wandb_counter is None:
+		return
+	with _wandb_counter.get_lock():
+		_wandb_counter.value += num_new_images
+
 def inference(data,device):
 	# vqgan
 	vqgan = None
@@ -122,7 +217,12 @@ def inference(data,device):
 
 	# ========================= build model =========================
 	config = LDM_config()
-	if global_sfm_method == 'orbslam_bimanual':
+	use_notebook_sampler = (global_sfm_method == 'orbslam_bimanual' and cli_args.sampler_mode == 'notebook')
+	if use_notebook_sampler:
+		score_model = NCSNpp_dual(config)
+		score_model.to(device)
+		sde = sde_lib.VESDE(sigma_min=config.model.sigma_min, sigma_max=config.model.sigma_max, N=cli_args.steps)
+	elif global_sfm_method == 'orbslam_bimanual':
 		if cli_args.left_right_pose_cond:
 			config.left_right_pose_cond = cli_args.left_right_pose_cond
 		config.gripper_state = cli_args.gripper_state
@@ -146,12 +246,14 @@ def inference(data,device):
 	ray_downsampler = torch.nn.Sequential(
 		ResnetBlock(in_ch=56,out_ch=128,down=True),
 		ResnetBlock(in_ch=128,out_ch=128,down=True)).to(device)
-	if global_sfm_method == 'orbslam_bimanual':
+	if use_notebook_sampler:
+		score_sde = Score_sde_model(score_model, sde, ray_downsampler, rays_require_downsample=False, rays_as_list=True)
+	elif global_sfm_method == 'orbslam_bimanual':
 		score_sde = Score_sde_bimanual_model(score_model, sde_bimanual, ray_downsampler, rays_require_downsample=False, rays_as_list=True)
 	else:
 		score_sde = Score_sde_model(score_model,sde,ray_downsampler,rays_require_downsample=False,rays_as_list=True)
 
-	checkpoint = torch.load(cli_args.model)
+	checkpoint = torch.load(cli_args.model, map_location=device)
 	adapted_state = {}
 	for k,v in checkpoint['score_sde_model'].items():
 		key_parts = k.split('.')
@@ -161,11 +263,17 @@ def inference(data,device):
 		adapted_state[new_key] = v
 	score_sde.load_state_dict(adapted_state)
 
-	ema = ExponentialMovingAverage(score_sde.parameters(),decay=0.999)
-	ema.load_state_dict(checkpoint['ema'])
-	ema.copy_to(score_sde.parameters())
+	if cli_args.use_ema:
+		if 'ema' not in checkpoint:
+			print('Warning: checkpoint has no ema state, skip EMA load.')
+		else:
+			ema = ExponentialMovingAverage(score_sde.parameters(),decay=0.999)
+			ema.load_state_dict(checkpoint['ema'])
+			ema.copy_to(score_sde.parameters())
 	# substitute model with score modifier, used to make bulk sampling easier
-	if global_sfm_method == 'orbslam_bimanual':
+	if use_notebook_sampler:
+		modifier = Score_modifier(score_sde.score_model,max_batch_size=cli_args.batch_size)
+	elif global_sfm_method == 'orbslam_bimanual':
 		modifier = Score_modifier_bimanual(score_sde.score_model,max_batch_size=cli_args.batch_size)
 	else:
 		modifier = Score_modifier(score_sde.score_model,max_batch_size=cli_args.batch_size)
@@ -174,12 +282,78 @@ def inference(data,device):
 	tlog('Setup complete','note')
 	batches = chunks(data, cli_args.batch_size)
 
+	if global_sfm_method == 'orbslam_bimanual' and use_notebook_sampler:
+		with torch.no_grad():
+			for batch in batches:
+				conditioning_ims = []
+				ff_refs = []
+				ff_as = []
+				ff_bs = []
+				outputs = []
+
+				zero_ff = torch.zeros((1, 56, 128, 128), device=device)
+				zero_ff_down = ray_downsampler(zero_ff)
+
+				for el in batch:
+					for arm in ('left', 'right'):
+						cond_path = _resolve_condition_path(el, arm)
+						if cli_args.verbose:
+							print(device, f'{arm}_im_b: {cond_path}')
+
+						im = Image.open(cond_path)
+						im = crop_like_dataset(im)
+
+						orig_copy_key = f'{arm}_orig_img_copy_path'
+						if orig_copy_key in el and not os.path.exists(el[orig_copy_key]):
+							pathlib.Path(os.path.dirname(el[orig_copy_key])).mkdir(parents=True, exist_ok=True)
+							cv2.imwrite(el[orig_copy_key], cv2.cvtColor(im, cv2.COLOR_RGB2BGR))
+
+						im = im[:, :, :3].astype(np.float32).transpose(2, 0, 1) / 127.5 - 1
+						im = torch.Tensor(im).unsqueeze(0).to(device)
+						if not cli_args.stable_diffusion_encoder:
+							encoded_im = vqgan.encode(im)
+						else:
+							encoded_im = vqgan.encode(im)[0]
+
+						conditioning_ims.append([encoded_im])
+						ff_refs.append([zero_ff_down])
+						ff_as.append([zero_ff_down])
+						ff_bs.append([zero_ff_down])
+						outputs.append(el[f'{arm}_output'])
+
+				if len(conditioning_ims) == 0:
+					continue
+
+				sampling_shape = (len(conditioning_ims), 4, 32, 32)
+				sampling_eps = 1e-5
+				x = score_sde.sde.prior_sampling(sampling_shape).to(device)
+
+				timesteps = torch.linspace(sde.T, sampling_eps, sde.N, device=device)
+				for i in tqdm(range(0, sde.N)):
+					t = timesteps[i]
+					vec_t = torch.ones(sampling_shape[0], device=t.device) * t
+					_, _ = sde.marginal_prob(x, vec_t)
+					x, x_mean = score_sde.reverse_diffusion_predictor(x, conditioning_ims, vec_t, ff_refs, ff_as, ff_bs)
+					x, x_mean = score_sde.langevin_corrector(x, conditioning_ims, vec_t, ff_refs, ff_as, ff_bs)
+
+				decoded = vqgan.decode(x_mean)
+				intermediate_sample = (decoded / 2 + 0.5)
+				intermediate_sample = torch.clip(
+					intermediate_sample.permute(0, 2, 3, 1).cpu() * 255., 0, 255
+				).type(torch.uint8).numpy()
+
+				for out, im in zip(outputs, intermediate_sample):
+					pathlib.Path(os.path.dirname(out)).mkdir(parents=True, exist_ok=True)
+					Image.fromarray(im).save(out)
+				_log_wandb_progress(len(outputs))
+		return
+
 	if global_sfm_method == 'orbslam_bimanual':
 		with torch.no_grad():
 			for batch in batches:
 				if cli_args.verbose:
 					for el in batch:
-						print(device, el['img'])
+						print(device, el.get('left_img', 'N/A'), el.get('right_img', 'N/A'))
 				w_l_conditioning_ims = []
 				w_l_ff_refs = []
 				w_l_ff_as = []
@@ -190,7 +364,11 @@ def inference(data,device):
 				w_r_ff_bs = []
 				gripper_state = []
 				for el in batch:
-					left_im = Image.open(el['left_img'])
+					if cli_args.cond_img_folder is not None:
+						left_cond_path = _resolve_cond_from_folder(el, 'left')
+					else:
+						left_cond_path = el['left_img']
+					left_im = Image.open(left_cond_path)
 					left_im = crop_like_dataset(left_im)
 					if not os.path.exists(el['left_orig_img_copy_path']):
 						cv2.imwrite(el['left_orig_img_copy_path'],cv2.cvtColor(left_im, cv2.COLOR_RGB2BGR))
@@ -202,7 +380,11 @@ def inference(data,device):
 					else:
 						left_encoded_im = vqgan.encode(left_im)[0]
 
-					right_im = Image.open(el['right_img'])
+					if cli_args.cond_img_folder is not None:
+						right_cond_path = _resolve_cond_from_folder(el, 'right')
+					else:
+						right_cond_path = el['right_img']
+					right_im = Image.open(right_cond_path)
 					right_im = crop_like_dataset(right_im)
 					if not os.path.exists(el['right_orig_img_copy_path']):
 						cv2.imwrite(el['right_orig_img_copy_path'],cv2.cvtColor(right_im, cv2.COLOR_RGB2BGR))
@@ -298,6 +480,7 @@ def inference(data,device):
 				for out, im in zip(w_r_outputs, w_r_intermediate_sample):
 					im_out = Image.fromarray(im)
 					im_out.save(out)
+				_log_wandb_progress(len(w_l_outputs) + len(w_r_outputs))
 	else:
 		# original implementation
 		with torch.no_grad():
@@ -362,6 +545,7 @@ def inference(data,device):
 				for out, im in zip(outputs, intermediate_sample):
 					im_out = Image.fromarray(im)
 					im_out.save(out)
+				_log_wandb_progress(len(outputs))
 
 
 # Remove duplicates based on the chosen key
@@ -376,6 +560,7 @@ def remove_duplicates(list_of_dicts, key_to_compare):
 
 if __name__ == '__main__':
 	import torch.multiprocessing as mp
+	mp.set_start_method('spawn', force=True)
 	data_path = cli_args.config
 	import json
 	data = json.load(open(data_path))
@@ -383,11 +568,69 @@ if __name__ == '__main__':
 	import os
 	if global_sfm_method == 'orbslam_bimanual':
 		data = [item for item in data if not os.path.isfile(item["left_output"])] + [item for item in data if not os.path.isfile(item["right_output"])]
-		data = remove_duplicates(data, 'left_img')
+		dedupe_key = None
+		for key in ['left_img', 'left_im_b', 'im_b_left', 'left_output']:
+			if len(data) > 0 and key in data[0]:
+				dedupe_key = key
+				break
+		if dedupe_key is not None:
+			data = remove_duplicates(data, dedupe_key)
 	else:
 		data = [item for item in data if not os.path.isfile(item["output"])]
 	print("Remaining files: ", len(data))
 	devices = [f'cuda:{i}' for i in cli_args.gpus]
+
+	# wandb init
+	if cli_args.wandb_project:
+		import wandb
+		import threading
+		if global_sfm_method == 'orbslam_bimanual':
+			total_images = len(data) * 2  # left + right
+		else:
+			total_images = len(data)
+		_wandb_counter = mp.Value('i', 0)
+		_wandb_total = total_images
+		_wandb_start_time = time.time()
+		wandb.init(
+			project=cli_args.wandb_project,
+			name=cli_args.wandb_run_name or os.path.basename(data_path),
+			config={
+				"config_file": data_path,
+				"model": cli_args.model,
+				"total_images": total_images,
+				"remaining_samples": len(data),
+				"batch_size": cli_args.batch_size,
+				"steps": cli_args.steps,
+				"gpus": cli_args.gpus,
+				"sfm_method": global_sfm_method,
+			},
+		)
+		_wandb_stop_event = threading.Event()
+		def _wandb_monitor():
+			"""Background thread that periodically reads the shared counter and logs to wandb."""
+			last_logged = -1
+			while not _wandb_stop_event.is_set():
+				with _wandb_counter.get_lock():
+					current = _wandb_counter.value
+				if current != last_logged:
+					elapsed = time.time() - _wandb_start_time
+					if current > 0 and _wandb_total > 0:
+						eta = elapsed / current * (_wandb_total - current)
+					else:
+						eta = 0
+					wandb.log({
+						"images_generated": current,
+						"images_total": _wandb_total,
+						"progress_pct": current / _wandb_total * 100 if _wandb_total > 0 else 0,
+						"elapsed_sec": elapsed,
+						"elapsed_min": elapsed / 60,
+						"eta_sec": eta,
+						"eta_min": eta / 60,
+					})
+					last_logged = current
+				_wandb_stop_event.wait(10)
+		_monitor_thread = threading.Thread(target=_wandb_monitor, daemon=True)
+		_monitor_thread.start()
 
 	if cli_args.external_gpu:
 		import torch
@@ -399,8 +642,31 @@ if __name__ == '__main__':
 		if len(devices) == 1:
 			inference(data, devices[0])
 		else:
-			mp.set_start_method('spawn')
 			datas = chunks_num(data,len(devices))
 			ar = list(zip(datas,devices))
-			with mp.Pool(len(devices)) as p:
+			pool_kwargs = {}
+			if _wandb_counter is not None:
+				pool_kwargs['initializer'] = _init_wandb_worker
+				pool_kwargs['initargs'] = (_wandb_counter, _wandb_total, _wandb_start_time)
+			with mp.Pool(len(devices), **pool_kwargs) as p:
 				p.starmap(inference, ar)
+
+	if cli_args.wandb_project:
+		import wandb
+		_wandb_stop_event.set()
+		_monitor_thread.join(timeout=5)
+		if wandb.run is not None:
+			# final log
+			with _wandb_counter.get_lock():
+				current = _wandb_counter.value
+			elapsed = time.time() - _wandb_start_time
+			wandb.log({
+				"images_generated": current,
+				"images_total": _wandb_total,
+				"progress_pct": current / _wandb_total * 100 if _wandb_total > 0 else 0,
+				"elapsed_sec": elapsed,
+				"elapsed_min": elapsed / 60,
+				"eta_sec": 0,
+				"eta_min": 0,
+			})
+			wandb.finish()

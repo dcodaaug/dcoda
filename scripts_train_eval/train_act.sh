@@ -3,12 +3,12 @@ METHOD="ACT_BC_LANG"
 NUM_DEMOS=200
 IMAGE_SIZE=128
 BATCH_SIZE=16
-DEMO_PATH=$PERACT_BIMANUAL_ROOT/data/rlbench_data/train/coordinated_lift_ball_200_demos_128x128
+DEMO_PATH=/home/zsh/dcoda/data/rlbench_data/train/coordinated_lift_ball_200_demos_128x128
 MASTER_PORT=20020
-SEED=0
+SEED=43
 RUN_NAME="200_demos_${SEED}"
 
-python train.py \
+CUDA_VISIBLE_DEVICES=1 python train.py \
     method=${METHOD} \
     method.train_demo_path=${DEMO_PATH} \
     rlbench.tasks=[${TASK_NAME}] \
@@ -22,6 +22,7 @@ python train.py \
     framework.training_iterations=260001 \
     framework.save_freq=2000 \
     framework.log_freq=2000 \
+    framework.num_workers=3 \
     framework.num_weights_to_keep=100 \
     replay.path=/tmp/arm/replay_${MASTER_PORT} \
     replay.batch_size=${BATCH_SIZE} \

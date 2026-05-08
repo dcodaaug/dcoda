@@ -53,6 +53,8 @@ class TaskUniformReplayBuffer(UniformReplayBuffer):
 
 
                 with open(join(self._save_dir, '%d.replay' % cursor), 'wb') as f:
+                    if(cursor % 2000 == 0):
+                        print("Writing replay buffer entry: %d" % cursor)
                     pickle.dump(kwargs, f)
                 # If first add, then pad for correct wrapping
                 if self._add_count.value == 0:

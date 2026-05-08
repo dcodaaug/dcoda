@@ -28,7 +28,8 @@ framework:
     eval_envs: 1
     eval_from_eps_number: 0
     eval_episodes: 5
-    eval_type: 'last' # or 'best', 'missing', or 'last'
+    eval_type: 'last' # or 'best', 'missing', 'all', int step, or [step1,step2,...]
+    eval_seed: null # null -> use start_seed; set int for deterministic full-eval seeding
     eval_save_metrics: True
     real_world_viz: True
     real_world_execute_k_actions: 1

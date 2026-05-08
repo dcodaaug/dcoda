@@ -77,7 +77,8 @@ class IndependentEnvRunner(EnvRunner):
               env_config,
               device_idx,
               save_metrics,
-              cinematic_recorder_cfg):
+              cinematic_recorder_cfg,
+              process_seed=None):
 
         if hasattr(self, "_on_thread_start"):
             self._on_thread_start()
@@ -127,4 +128,5 @@ class IndependentEnvRunner(EnvRunner):
                                                         True,
                                                         device_idx,
                                                         save_metrics,
-                                                        cinematic_recorder_cfg)
+                                                        cinematic_recorder_cfg,
+                                                        process_seed)

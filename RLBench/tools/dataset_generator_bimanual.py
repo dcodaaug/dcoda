@@ -195,7 +195,7 @@ def get_bimanual_tasks():
 
 
 @click.command()
-@filepath_option("--save_path", default="./data/rlbench_data/",  help="Where to save the demos.")
+@filepath_option("--save_path", default="./data/rlbench_data_test/",  help="Where to save the demos.")
 @choice_option('--tasks', type=click.Choice(get_bimanual_tasks()), multiple=True, help='The tasks to collect. If empty, all tasks are collected.')
 @click.option("--episodes_per_task", default=10, help="The number of episodes to collect per task.", prompt="Number of episodes")
 @click.option("--all_variations", is_flag=True, default=True, help="Include all variations when sampling epsiodes")

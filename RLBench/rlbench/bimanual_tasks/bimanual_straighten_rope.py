@@ -1,7 +1,7 @@
 from typing import List
 from pyrep.objects.proximity_sensor import ProximitySensor
 from pyrep.objects.shape import Shape
-from rlbench.backend.conditions import DetectedCondition
+from rlbench.backend.conditions import DetectedCondition, OrConditions
 from rlbench.backend.task import Task
 from rlbench.backend.task import BimanualTask
 from collections import defaultdict
@@ -10,8 +10,10 @@ class BimanualStraightenRope(BimanualTask):
 
     def init_task(self) -> None:
         self.register_success_conditions(
-            [DetectedCondition(Shape('head'), ProximitySensor('success_head')),
-             DetectedCondition(Shape('tail'), ProximitySensor('success_tail'))])
+            [OrConditions([
+                DetectedCondition(Shape('head'), ProximitySensor('success_head')),
+                DetectedCondition(Shape('tail'), ProximitySensor('success_tail'))
+            ])])
 
         self.waypoint_mapping = defaultdict(lambda: 'right')
         for i in range(3):

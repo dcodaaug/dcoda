@@ -1,0 +1,11 @@
+python -m torch.distributed.launch --use_env --master_port=25678 scripts/mini_train.py \
+--batch_size 32 \
+--task coordinated_lift_ball \
+--sfm_method orbslam_bimanual \
+--num_gpus_per_node 2 \
+--instance_data_path ../instance-data/250125_coordinated_lift_ball_100_org_data_w_depth_v1_run1 \
+--colmap_data_folders ../instance-data/250125_coordinated_lift_ball_100_org_data_w_depth_v1_run1/coordinated_lift_ball_dmd_bimanual \
+--focal_lengths -110.85124795436963 \
+--max_epoch 20000 \
+--checkpoint_retention_interval 500 \
+--wandb

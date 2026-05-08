@@ -1,6 +1,7 @@
 import gc
 import logging
 import os
+import random
 import sys
 
 import peract_config
@@ -33,8 +34,16 @@ import torch.multiprocessing as mp
 from agents import agent_factory
 
 
+def set_global_seeds(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
 def eval_seed(
-    train_cfg, eval_cfg, logdir, env_device, multi_task, seed, env_config
+    train_cfg, eval_cfg, logdir, env_device, multi_task, seed, env_config, eval_seed
 ) -> None:
     tasks = eval_cfg.rlbench.tasks
     rg = RolloutGenerator()
@@ -138,6 +147,30 @@ def eval_seed(
         weight_folders = [int(eval_cfg.framework.eval_type)]
         print("Weight:", weight_folders)
 
+    # evaluate several specific checkpoints, e.g. framework.eval_type=[100000,120000]
+    elif isinstance(eval_cfg.framework.eval_type, (ListConfig, list, tuple)):
+        if len(eval_cfg.framework.eval_type) == 0:
+            raise Exception("Empty eval_type list")
+
+        weight_folders = []
+        for weight in eval_cfg.framework.eval_type:
+            if isinstance(weight, (int, np.integer)):
+                step = int(weight)
+            elif isinstance(weight, str) and weight.strip().isdigit():
+                step = int(weight.strip())
+            else:
+                raise Exception(
+                    "Unknown eval type element: %s. Expected int-like values."
+                    % str(weight)
+                )
+
+            weight_path = os.path.join(weightsdir, str(step))
+            if not os.path.isdir(weight_path):
+                raise Exception("Weight folder not found: %s" % weight_path)
+            weight_folders.append(step)
+
+        print("Weights:", weight_folders)
+
     else:
         raise Exception("Unknown eval type")
 
@@ -150,9 +183,11 @@ def eval_seed(
     # evaluate several checkpoints in parallel
     # NOTE: in multi-task settings, each task is evaluated serially, which makes everything slow!
     split_n = utils.split_list(weight_folders, eval_cfg.framework.eval_envs)
+    process_rank = 0
     for split in split_n:
         processes = []
         for e_idx, weight in enumerate(split):
+            process_seed = int(eval_seed) + process_rank
             p = mp.Process(
                 target=env_runner.start,
                 args=(
@@ -163,10 +198,12 @@ def eval_seed(
                     e_idx % torch.cuda.device_count(),
                     eval_cfg.framework.eval_save_metrics,
                     eval_cfg.cinematic_recorder,
+                    process_seed,
                 ),
             )
             p.start()
             processes.append(p)
+            process_rank += 1
         for p in processes:
             p.join()
 
@@ -180,6 +217,13 @@ def eval_seed(
 def main(eval_cfg: DictConfig) -> None:
     logging.info("\n" + OmegaConf.to_yaml(eval_cfg))
 
+    eval_random_seed = OmegaConf.select(eval_cfg, "framework.eval_seed", default=None)
+    eval_random_seed = int(
+        eval_cfg.framework.start_seed if eval_random_seed is None else eval_random_seed
+    )
+    set_global_seeds(eval_random_seed)
+    logging.info("Using eval seed %d.", eval_random_seed)
+
     start_seed = eval_cfg.framework.start_seed
     logdir = os.path.join(
         eval_cfg.framework.logdir,
@@ -189,6 +233,7 @@ def main(eval_cfg: DictConfig) -> None:
     )
 
     train_config_path = os.path.join(logdir, "config.yaml")
+    train_config_path = os.path.join('/home/zsh/dcoda', train_config_path)
 
     if os.path.exists(train_config_path):
         with open(train_config_path, "r") as f:
@@ -282,6 +327,7 @@ def main(eval_cfg: DictConfig) -> None:
         multi_task,
         start_seed,
         env_config,
+        eval_random_seed,
     )
 
 

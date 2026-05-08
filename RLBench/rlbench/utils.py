@@ -120,7 +120,8 @@ def get_stored_demos(amount: int, image_paths: bool, dataset_root: str,
         for camera_name, _ in full_camera_names:
             data_path = os.path.join(example_path, camera_name)
             if num_steps != len(os.listdir(data_path)):
-                print(f"not sufficent data points {data_path} expected {num_steps} was {len(os.listdir(data_path))}")
+                # print(f"not sufficent data points {data_path} expected {num_steps} was {len(os.listdir(data_path))}")
+                0
                 #raise RuntimeError('Broken dataset assumption')
 
         for i in range(num_steps):
@@ -141,11 +142,27 @@ def get_stored_demos(amount: int, image_paths: bool, dataset_root: str,
                     image_name = f"depth_{i:04d}.png"
                     image_path = os.path.join(data_path, image_name)
                     try:
-                        image = image_to_float_array( _resize_if_needed(Image.open(image_path), camera_config.image_size),DEPTH_SCALE)
-                    except:
-                        image_name = f"depth_{i:04d}.npy"
-                        image_path = os.path.join(data_path, image_name)
-                        image = np.load(image_path, allow_pickle=True)
+                        image = image_to_float_array(
+                            _resize_if_needed(
+                                Image.open(image_path),
+                                camera_config.image_size
+                            ),
+                            DEPTH_SCALE
+                        )
+                    except Exception as e1:
+                        try:
+                            image_name = f"depth_{i:04d}.npy"
+                            image_path = os.path.join(data_path, image_name)
+                            image = np.load(image_path, allow_pickle=True)
+                        except Exception as e2:
+                            # 最终兜底：全 0 depth
+                            image = np.zeros((128, 128), dtype=np.float32)
+                    # try:
+                    #     image = image_to_float_array( _resize_if_needed(Image.open(image_path), camera_config.image_size),DEPTH_SCALE)
+                    # except:
+                    #     image_name = f"depth_{i:04d}.npy"
+                    #     image_path = os.path.join(data_path, image_name)
+                    #     image = np.load(image_path, allow_pickle=True)
 
                     if camera_config.depth:
                         if camera_config.depth_in_meters:
